@@ -11,6 +11,34 @@
 Mesos master should be available on `10.10.10.10:5050` and Marathon on 
 `10.10.10.10:8080`.
 
+## Example Docker app with port mapping
+
+```json
+{
+  "id": "/cni-test",
+  "instances": 1,
+  "cmd": "python -m SimpleHTTPServer 8080",
+  "cpus": 0.5,
+  "disk": 0,
+  "mem": 512,
+  "container": {
+    "docker": {
+      "image": "python:2.7-stretch"
+    },
+    "type": "MESOS",
+    "portMappings": [
+      { "containerPort": 8080, "hostPort": 0 }
+    ]
+  },
+  "portDefinitions": [
+    {
+      "port": 0,
+      "protocol": "tcp"
+    }
+  ]
+}
+```
+
 ## See also
 
 * [Mesos CNI documentation][3]
