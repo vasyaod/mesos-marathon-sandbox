@@ -1,0 +1,168 @@
+# -*- mode: ansible -*-
+# vi: set ft=ansible :
+
+---
+- hosts: all
+  gather_facts: no
+
+  become: true
+  become_method: sudo
+  become_user: root
+
+  tasks:
+  - name: install python
+    raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal)
+
+  - name: add mesosphere gpg key
+    apt_key:
+      keyserver: keyserver.ubuntu.com
+      id: E56151BF
+      state: present
+
+  - name: add mesosphere apt repo
+    apt_repository:
+      repo: deb http://repos.mesosphere.com/ubuntu xenial main
+      state: present
+
+  - name: add oracle java repo
+    apt_repository:
+      repo: ppa:webupd8team/java
+      state: present
+
+  - name: upgrade packages
+    apt: update-cache=yes upgrade=yes
+
+  - name: accept oracle license part 1
+    shell: echo "debconf shared/accepted-oracle-license-v1-1 select true" | debconf-set-selections
+
+  - name: accept oracle license part 2
+    shell: echo "debconf shared/accepted-oracle-license-v1-1 seen true" | debconf-set-selections
+
+  - name: install dependencies
+    apt: name={{ item }} state=present force=true
+    with_items:
+      - marathon
+      - mesos
+      - oracle-java8-installer
+      - oracle-java8-set-default
+
+  - name: install dvdcli
+    shell: curl -sSL https://dl.bintray.com/emccode/dvdcli/install | sh -s stable
+    args:
+      creates: /usr/bin/dvdcli
+
+  - name: install cni plugins
+    unarchive: 
+      src: https://github.com/containernetworking/plugins/releases/download/v0.6.0/cni-plugins-amd64-v0.6.0.tgz
+      dest: /usr/local/bin
+      remote_src: yes
+
+  - name: enable and start marathon service
+    service:
+      name: marathon
+      enabled: yes
+      state: started
+
+  - name: enable and start mesos-master service
+    service:
+      name: mesos-master
+      enabled: yes
+      state: started
+
+  - name: enable and start mesos-slave service
+    service:
+      name: mesos-slave
+      enabled: yes
+      state: started
+
+  # configure marathon
+
+  - name: configure mesos-master for marathon
+    lineinfile:
+      path: /etc/default/marathon
+      create: yes
+      line: MARATHON_MASTER="zk://localhost:2181/mesos"
+
+  # configure mesos-master
+  - name: configure mesos-master hostname
+    lineinfile:
+      path: /etc/mesos-master/hostname
+      create: yes
+      line: 10.10.10.10
+
+  # configure mesos-slave
+
+  - name: configure mesos-slave cni network config dir
+    lineinfile:
+      path: /etc/mesos-slave/network_cni_config_dir
+      create: yes
+      line: /etc/cni/net.d
+  
+  - name: configure mesos-slave cni plugins dir
+    lineinfile:
+      path: /etc/mesos-slave/network_cni_plugins_dir
+      create: yes
+      line: /usr/local/bin
+
+  - name: configure mesos-slave hostname
+    lineinfile:
+      path: /etc/mesos-slave/hostname
+      create: yes
+      line: 10.10.10.10
+
+  - name: configure mesos-slave image-providers
+    lineinfile:
+      path: /etc/mesos-slave/image_providers
+      create: yes
+      line: docker
+
+  - name: configure mesos-slave isolation
+    lineinfile:
+      path: /etc/mesos-slave/isolation
+      create: yes
+      line: cgroups/cpu,cgroups/mem,disk/du,namespaces/pid,filesystem/linux,docker/runtime,docker/volume
+
+  - name: create cni network config dir
+    file:
+      path: /etc/cni/net.d
+      owner: root
+      group: root
+      mode: 0755
+      recurse: yes
+      state: directory
+
+  - name: add cni network config
+    copy:
+      src: mesos-bridge.conf
+      dest: /etc/cni/net.d/mesos-bridge.conf
+
+  - name: link mesos-cni-port-mapper
+    file: 
+      path: /usr/local/bin/mesos-cni-port-mapper
+      owner: root
+      group: root
+      mode: 0755
+      src: /usr/libexec/mesos/mesos-cni-port-mapper
+      state: link
+
+  # restarts
+
+  - name: clean mesos-slave meta
+    file:
+      state: absent
+      path: /var/lib/mesos/meta/slaves/latest
+
+  - name: restart marathon
+    service:
+      name: mesos-slave
+      state: restarted
+
+  - name: restart mesos-master
+    service:
+      name: mesos-master
+      state: restarted
+
+  - name: restart mesos-slave
+    service:
+      name: mesos-slave
+      state: restarted
