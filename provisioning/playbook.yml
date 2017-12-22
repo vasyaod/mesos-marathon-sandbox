@@ -46,6 +46,7 @@
       - oracle-java8-installer
       - oracle-java8-set-default
 
+  # dvdcli is required by mesos docker/volume isolator
   - name: install dvdcli
     shell: curl -sSL https://dl.bintray.com/emccode/dvdcli/install | sh -s stable
     args:
@@ -84,6 +85,7 @@
       line: MARATHON_MASTER="zk://localhost:2181/mesos"
 
   # configure mesos-master
+  
   - name: configure mesos-master hostname
     lineinfile:
       path: /etc/mesos-master/hostname
