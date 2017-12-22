@@ -124,6 +124,14 @@
       create: yes
       line: cgroups/cpu,cgroups/mem,disk/du,namespaces/pid,filesystem/linux,docker/runtime,docker/volume
 
+  - name: disable user switch for tasks
+    file:
+      path: /etc/mesos-slave/?no-switch_user
+      owner: root
+      group: root
+      mode: 0644
+      state: file
+
   - name: create cni network config dir
     file:
       path: /etc/cni/net.d
